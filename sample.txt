@@ -1,0 +1,269 @@
+input {
+  file {
+    path => [ "/var/log/*.log", "/var/log/messages", "/var/log/syslog" ]
+    type => "syslog"
+  }
+}
+
+output {
+  elasticsearch { hosts => localhost index => "logstash-test" }
+  stdout { codec => rubydebug }
+}
+filter {
+  if [type] == "syslog" {
+    grok {
+      match => { "message" => "%{SYSLOGTIMESTAMP:syslog_timestamp} %{SYSLOGHOST:syslog_hostname} %{DATA:syslog_program}(?:\[%{POSINT:syslog_pid}\])?: %{GREEDYDATA:syslog_message}" }
+      add_field => [ "received_at", "%{@timestamp}" ]
+      add_field => [ "received_from", "%{host}" ]
+    }
+    syslog_pri { }
+    date {
+      match => [ "syslog_timestamp", "MMM  d HH:mm:ss", "MMM dd HH:mm:ss" ]
+    }
+  }
+}
+
+
+
+xpack.monitoring.exporters:
+  id1:
+    type: http
+    host: ["http://es-mon-1:9200", "http://es-mon2:9200"]
+
+
+curl -XPUT 'localhost:9200/_xpack/watcher/watch/cluster_health_watch?pretty' -H 'Content-Type: application/json' -d'
+{
+  "trigger" : {
+    "schedule" : { "interval" : "10s" }
+  },
+  "input" : {
+    "http" : {
+      "request" : {
+       "host" : "localhost",
+       "port" : 9200,
+       "path" : "/_cluster/health"
+      }
+    }
+  },
+  "condition" : {
+    "compare" : {
+      "ctx.payload.status" : { "eq" : "green" }
+    }
+  },
+  "actions" : {
+    "send_email" : {
+      "email" : {
+        "to" : "er.kabiraj.pratihari@gmail.com",
+        "subject" : "Cluster Status Warning",
+        "body" : "Cluster status is RED"
+      }
+    }
+  }
+}
+'
+
+
+curl -XGET 'localhost:9200/.watcher-history*/_search?pretty&pretty' -H 'Content-Type: application/json' -d'
+{
+  "query" : {
+    "match" : { "result.condition.met" : true }
+  }
+}
+'
+
+
+
+curl -XPUT 'localhost:9200/_xpack/watcher/watch/log_error_watch?pretty' -H 'Content-Type: application/json' -d'
+{
+  "trigger" : { "schedule" : { "interval" : "30s" }},
+  "input" : {
+    "search" : {
+      "request" : {
+        "indices" : [ "logs" ],
+        "body" : {
+          "query" : {
+            "match" : { "message": "error" }
+          }
+        }
+      }
+    }
+  },
+  "condition" : {
+    "compare" : { "ctx.payload.hits.total" : { "gt" : 0 }}
+  },
+  "actions" : {
+    "log_error" : {
+      "logging" : {
+        "text" : "Found {{ctx.payload.hits.total}} errors in the logs"
+      }
+    },	
+    "send_email" : {
+    "throttle_period" : "2m",
+      "email" : {
+        "to" : "er.kabiraj.pratihari@gmail.com",
+        "subject" : "Errors in Cluster",
+        "body" : "Found {{ctx.payload.hits.total}} errors in the logs"
+      }
+    }
+  }
+}
+'
+curl -XGET 'localhost:9200/.triggered_watches?pretty'
+
+
+xpack.notification.email.account:
+work:
+profile: gmail
+email_defaults:
+from: xpackwatcher
+smtp:
+auth: true
+starttls.enable: true
+host: smtp.gmail.com
+port: 587
+user: er.kabiraj.pratihari@gmail.com
+password: kabirapratiharrykker
+
+
+
+xpack.notification.email.account:
+  work:
+    profile: gmail
+    email_defaults:
+      from: xpackwatcher 
+    smtp:
+      auth: true
+      starttls.enable: true
+      host: smtp.gmail.com
+      port: 587
+      user: er.kabiraj.pratihari@gmail.com 
+      password: kabirapratiharrykker
+
+
+
+
+
+curl -XPUT 'localhost:9200/_xpack/watcher/watch/cluster_health_watch?pretty' -H 'Content-Type: application/json' -d'
+{
+  "trigger" : {
+    "schedule" : { "interval" : "2h" }
+  },
+  "input" : {
+    "http" : {
+      "request" : {
+       "host" : "localhost",
+       "port" : 9200,
+       "path" : "/_cluster/health"
+      }
+    }
+  },
+  "condition" : {
+    "compare" : {
+      "ctx.payload.status" : { "eq" : "red" }
+    }
+  },
+  "actions" : {
+    "send_email" : {
+    "throttle_period" : "2m",
+      "email" : {
+        "to" : "er.kabiraj.pratihari@gmail.com",
+        "subject" : "Cluster Status Warning",
+        "body" : "Cluster status is RED"
+      }
+    }
+  }
+}
+'
+
+9898305762
+
+curl -XPOST curl 'localhost:9200/_xpack/watcher/watch/log_error_watch/_execute?pretty' -H 'Content-Type: application/json'
+
+
+sendEmail -v -f nagios@mail.com -s smtp.gmail.com:587 -xu cos2sparcteam@gmail.com -xp sparc123 -t er.kabiraj.pratihari@gmail.com -o tls=yes -u samplesubject -m samplecontent
+
+sendmail -v -f nagios@mail.com -s smtp.gmail.com:587 -xu cos2sparcteam@gmail.com -xp sparc123 -t er.kabiraj.pratihari@gmail.com -o tls=yes -u samplesubject -m samplecontent 
+
+
+
+
+
+
+
+# 'notify-host-by-email' command definition
+define command{
+        command_name    notify-host-by-email
+        command_line    /usr/bin/printf "%b" "***** Nagios *****\n\nNotification Type: $NOTIFICATIONTYPE$\nHost: $HOSTNAME$\nState: $HOSTSTATE$\nAddress: $HOSTADDRESS$\nInfo: $HOSTOUTPUT$\n\nDate/Time: $LONGDATETIME$\n" | /usr/sbin/sendmail -s "** $NOTIFICATIONTYPE$ Host Alert: $HOSTNAME$ is $HOSTSTATE$ **" $CONTACTEMAIL$
+        }
+
+# 'notify-service-by-email' command definition
+define command{
+        command_name    notify-service-by-email
+        command_line    /usr/bin/printf "%b" "***** Nagios *****\n\nNotification Type: $NOTIFICATIONTYPE$\n\nService: $SERVICEDESC$\nHost: $HOSTALIAS$\nAddress: $HOSTADDRESS$\nState: $SERVICESTATE$\n\nDate/Time: $LONGDATETIME$\n\nAdditional Info:\n\n$SERVICEOUTPUT$\n" | /usr/sbin/sendmail -s "** $NOTIFICATIONTYPE$ Service Alert: $HOSTALIAS$/$SERVICEDESC$ is $SERVICESTATE$ **" $CONTACTEMAIL$
+        }
+
+
+
+# Centreon / Nagios Host Notification:
+#
+#    $USER1$/otrs-ticket.pl --otrs_user="user" --otrs_pass="pass" --otrs_server="server.domain.com:80" --problem_id="$HOSTPROBLEMID$" --problem_id_last="$LASTHOSTPROBLEMID$" --event_type="$NOTIFICATIONTYPE$" --event_date="$LONGDATETIME$" --event_host="$HOSTNAME$" --event_addr="$HOSTADDRESS$" --event_desc="$SERVICEACKAUTHOR$ $SERVICEACKCOMMENT$" --event_state="$HOSTSTATE$" --event_output="$HOSTOUTPUT$"
+#
+# Centreon / Nagios Service Notification:
+#
+#     $USER1$/otrs-ticket.pl --otrs_user="user" --otrs_pass="pass" --otrs_server="server.domain.com:80" --problem_id="$SERVICEPROBLEMID$" --problem_id_last="$LASTSERVICEPROBLEMID$" --event_type="$NOTIFICATIONTYPE$" --event_date="$LONGDATETIME$" --event_host="$HOSTALIAS$" --event_addr="$HOSTADDRESS$" --event_desc="$SERVICEDESC$" --event_state="$SERVICESTATE$" --event_output="$SERVICEOUTPUT$"
+#
+# Requirements for OTRS:
+
+
+perl -T /usr/local/nagios/libexec/otrs-ticket.pl --verbose --otrs_user="cos2sparc" --otrs_pass="sparc123" --otrs_server="192.168.1.149:80" --otrs_customer="unknown" --problem_id="1234" --event_type="PROBLEM" --event_date="Fri Oct 13 00:30:28 CDT 2000" --event_host="TEST-TICKET-01" --event_addr="127.0.0.1" --event_desc="$ $" --event_state="DOWN" --event_output="Host Unreachable"
+
+DBD::SQLite
+        --event_output="Host Unreachable"
+
+
+http://www.cpan.org/modules/by-module/DBD/DBD-SQLite-1.54.tar.gz
+
+perl Makefile.PL
+  make
+  make test
+
+
+
+
+curl "http://52.14.169.126/otrs/nph-genericinterface.pl/Webservice/GenericTicketConnectorREST/Ticket?UserLogin=root@localhost&Password=sparc123" -H "Content-Type: application/json" -d "{\"Ticket\":{\"Title\":\"REST Create Test\", \"Type\": \"Unclassified\", \"Queue\":\"Raw\",\"State\":\"open\",\"Priority\":\"3 normal\",\"CustomerUser\":\"unknown\"},\"Article\":{\"Subject\":\"Rest Create Test\",\"Body\":\"This is only a test\",\"ContentType\":\"text/plain; charset=utf8\"}}"  -X POST
+
+perl -T /usr/local/nagios/libexec/otrs-ticket.pl --verbose --otrs_user="root@localhost" --otrs_pass="sparc123" --otrs_server="52.14.169.126" --otrs_customer="unknown" --problem_id="1234" --event_type="PROBLEM" --event_date="Fri Oct 13 00:30:28 CDT 2000" --event_host="TEST-TICKET-01" --event_addr="127.0.0.1" --event_desc="$ $" --event_state="DOWN" --event_output="Host Unreachable"
+
+
+
+
+
+# otrs api call for service
+define command{
+        command_name    otrs-api-service
+        command_line    perl -T $USER1$/otrs-ticket.pl --otrs_user="root@localhost" --otrs_pass="sparc123" --otrs_server="192.168.1.149" --problem_id="$SERVICEPROBLEMID$" --problem_id_last="$LASTSERVICEPROBLEMID$" --event_type="$NOTIFICATIONTYPE$" --event_date="$LONGDATETIME$" --event_host="$HOSTALIAS$" --event_addr="$HOSTADDRESS$" --event_desc="$SERVICEDESC$" --event_state="$SERVICESTATE$" --event_output="$SERVICEOUTPUT$"
+	}
+	
+	
+
+
+Username: admin
+Password: awrptXgndxQF
+
+
+perl -T $USER1$/otrs-ticket.pl --otrs_user="root@localhost" --otrs_pass="sparc123" --otrs_server="192.168.1.149" --problem_id="$HOSTPROBLEMID$" --problem_id_last="$LASTHOSTPROBLEMID$" --event_type="TICKET CREATE/UPDATE" --event_date="$LONGDATETIME$" --event_host="$HOSTNAME$" --event_addr="$HOSTADDRESS$" --event_desc="$SERVICEACKAUTHOR$ $SERVICEACKCOMMENT$" --event_state="$HOSTSTATE$" --event_output="$HOSTOUTPUT$"
+
+
+#service api call for service now
+define command {
+       command_name             notify-service-by-snt
+       command_line             $USER1$/sn_ticketer.pl --page="incident.do" --host="$HOSTNAME$" --service="$SERVICEDESC$" --state="$SERVICESTATE$" --category="$_SERVICECATEGORY$" --subcategory="$_SERVICESUBCAT$" --priority="$_PRIORITY$" --group="$CONTACTALIAS$" --shortdesc="$SERVICEDESC$ on $HOSTNAME$ is   $SERVICESTATE$" --desc="Host: $HOSTNAME$\nService: $SERVICEDESC$\nState: $SERVICESTATE$\nTime: $LONGDATETIME$\nDescription: $SERVICEOUTPUT$\n\n" $_SERVICEPASSIVE$
+}
+
+/usr/local/nagios/libexec
+
+/usr/local/nagios/libexec/sn_ticketer.pl --page="incident.do" --host="HOSTNAME" --service="SERVICEDESC" --state="SERVICESTATE" --category="SERVICECATEGORY" --subcategory="SERVICESUBCAT" --priority="PRIORITY" --group="CONTACTALIAS" --shortdesc="SERVICEDESC on HOSTNAME is SERVICESTATE" --desc="Host: HOSTNAME\nService: SERVICEDESC\nState: SERVICESTATE\nTime: LONGDATETIME\nDescription: SERVICEOUTPUT\n\n" "SERVICEPASSIVE"
+
+echo 'show databases;' | mysql -u root -p'mysql123' -h localhost
+
+/usr/local/nagios/libexec/sn_ticketer.pl --page="incident.do" --host="HOSTNAME" --service="SERVICEDESC" --state="SERVICESTATE" --category="SERVICECATEGORY" --subcategory="SERVICESUBCAT" --priority="1" --group="CONTACTALIAS" --shortdesc="SERVICEDESC on HOSTNAME is SERVICESTATE" --desc="Host: HOSTNAME\nService: SERVICEDESC\nState: SERVICESTATE\nTime: LONGDATETIME\nDescription: SERVICEOUTPUT\n\n"
